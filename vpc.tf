@@ -3,6 +3,11 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+locals {
+  az_count     = min(3, length(data.aws_availability_zones.available.names))
+  subnet_count = local.az_count * 2 # 2 subnets (1 public, 1 private) per AZ
+}
+
 # VPC
 resource "aws_vpc" "main" {
   count      = var.vpc_count
@@ -15,26 +20,26 @@ resource "aws_vpc" "main" {
 
 # Public Subnets
 resource "aws_subnet" "public" {
-  count                   = var.vpc_count * var.subnet_count
-  vpc_id                  = aws_vpc.main[floor(count.index / var.subnet_count)].id
-  cidr_block              = cidrsubnet(aws_vpc.main[floor(count.index / var.subnet_count)].cidr_block, 8, count.index % var.subnet_count)
-  availability_zone       = data.aws_availability_zones.available.names[count.index % var.subnet_count]
+  count                   = var.vpc_count * local.az_count
+  vpc_id                  = aws_vpc.main[floor(count.index / local.az_count)].id
+  cidr_block              = cidrsubnet(aws_vpc.main[floor(count.index / local.az_count)].cidr_block, 8, count.index % local.az_count)
+  availability_zone       = data.aws_availability_zones.available.names[count.index % local.az_count]
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-public-subnet-${floor(count.index / var.subnet_count) + 1}-${count.index % var.subnet_count + 1}"
+    Name = "${var.project_name}-public-subnet-${floor(count.index / local.az_count) + 1}-${count.index % local.az_count + 1}"
   }
 }
 
 # Private Subnets
 resource "aws_subnet" "private" {
-  count             = var.vpc_count * var.subnet_count
-  vpc_id            = aws_vpc.main[floor(count.index / var.subnet_count)].id
-  cidr_block        = cidrsubnet(aws_vpc.main[floor(count.index / var.subnet_count)].cidr_block, 8, (count.index % var.subnet_count) + var.subnet_count)
-  availability_zone = data.aws_availability_zones.available.names[count.index % var.subnet_count]
+  count             = var.vpc_count * local.az_count
+  vpc_id            = aws_vpc.main[floor(count.index / local.az_count)].id
+  cidr_block        = cidrsubnet(aws_vpc.main[floor(count.index / local.az_count)].cidr_block, 8, (count.index % local.az_count) + local.az_count)
+  availability_zone = data.aws_availability_zones.available.names[count.index % local.az_count]
 
   tags = {
-    Name = "${var.project_name}-private-subnet-${floor(count.index / var.subnet_count) + 1}-${count.index % var.subnet_count + 1}"
+    Name = "${var.project_name}-private-subnet-${floor(count.index / local.az_count) + 1}-${count.index % local.az_count + 1}"
   }
 }
 
@@ -75,14 +80,14 @@ resource "aws_route_table" "private" {
 
 # Associate Public Subnets with Public Route Table
 resource "aws_route_table_association" "public" {
-  count          = var.vpc_count * var.subnet_count
+  count          = var.vpc_count * local.az_count
   subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public[floor(count.index / var.subnet_count)].id
+  route_table_id = aws_route_table.public[floor(count.index / local.az_count)].id
 }
 
 # Associate Private Subnets with Private Route Table
 resource "aws_route_table_association" "private" {
-  count          = var.vpc_count * var.subnet_count
+  count          = var.vpc_count * local.az_count
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[floor(count.index / var.subnet_count)].id
+  route_table_id = aws_route_table.private[floor(count.index / local.az_count)].id
 }
