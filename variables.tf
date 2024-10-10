@@ -14,7 +14,3 @@ variable "vpc_count" {
 variable "base_cidr_block" {
   type = string
 }
-
-variable "subnet_count" {
-  type = number
-}
