@@ -14,3 +14,11 @@ variable "vpc_count" {
 variable "base_cidr_block" {
   type = string
 }
+
+variable "app_port" {
+  type = number
+}
+
+variable "custom_ami_id" {
+  type = string
+}
