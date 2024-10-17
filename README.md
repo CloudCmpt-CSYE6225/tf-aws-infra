@@ -28,7 +28,8 @@
    project_name    = " "
    vpc_count       = " "
    base_cidr_block = " "
-   subnet_count    = " "
+   app_port        = " "
+   custom_ami_id   = " "
 
    terraform plan -var-file="<>.tfvars"
    terraform apply -var-file="<>.tfvars"
