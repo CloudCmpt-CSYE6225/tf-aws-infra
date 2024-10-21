@@ -137,12 +137,81 @@ resource "aws_security_group" "app_sg" {
   }
 }
 
+resource "aws_security_group" "db_sg" {
+  name        = "database-security-group"
+  description = "Security group for RDS instance"
+  vpc_id      = aws_vpc.main[0].id
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "database-security-group"
+  }
+}
+
+# RDS Parameter Group
+resource "aws_db_parameter_group" "custom_pg" {
+  family = "mysql8.0"
+  name   = "csye6225-pg"
+
+  parameter {
+    name  = "character_set_server"
+    value = "utf8"
+  }
+
+  parameter {
+    name  = "character_set_client"
+    value = "utf8"
+  }
+}
+
+# RDS Subnet Group
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "csye6225-rds-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name = "CSYE6225 RDS Subnet Group"
+  }
+}
+
+# RDS Instance
+resource "aws_db_instance" "csye6225" {
+  identifier           = "csye6225"
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  storage_type         = "gp2"
+  db_name              = "csye6225"
+  username             = var.db_username
+  password             = var.db_password
+  parameter_group_name = aws_db_parameter_group.custom_pg.name
+  skip_final_snapshot  = true
+  publicly_accessible  = false
+  multi_az             = false
+
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
+}
 resource "aws_instance" "app_instance" {
   ami                    = var.custom_ami_id
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.app_sg.id]
-
+  depends_on = [aws_db_instance.csye6225]
   disable_api_termination = false
 
   root_block_device {
@@ -150,6 +219,19 @@ resource "aws_instance" "app_instance" {
     volume_type           = "gp2"
     delete_on_termination = true
   }
+  user_data = base64encode(<<EOF
+  #!/bin/bash
+  while ! nc -z ${aws_db_instance.csye6225.endpoint} 3306; do
+    sleep 10
+  done
+  echo "DB_HOST=${aws_db_instance.csye6225.endpoint}" >> /opt/app/.env
+  echo "DB_USER=${var.db_username}" >> /opt/app/.env
+  echo "DB_PASSWORD=${var.db_password}" >> /opt/app/.env
+  echo "DB_NAME=csye6225" >> /opt/app/.env
+  echo "PORT=${var.app_port}" >> /opt/app/.env
+  systemctl restart webapp
+  EOF
+  )
 
   tags = {
     Name = "web-application-instance"
