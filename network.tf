@@ -207,11 +207,11 @@ resource "aws_db_instance" "csye6225" {
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
 }
 resource "aws_instance" "app_instance" {
-  ami                    = var.custom_ami_id
-  instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public[0].id
-  vpc_security_group_ids = [aws_security_group.app_sg.id]
-  depends_on = [aws_db_instance.csye6225]
+  ami                     = var.custom_ami_id
+  instance_type           = "t2.micro"
+  subnet_id               = aws_subnet.public[0].id
+  vpc_security_group_ids  = [aws_security_group.app_sg.id]
+  depends_on              = [aws_db_instance.csye6225]
   disable_api_termination = false
 
   root_block_device {
@@ -226,10 +226,14 @@ resource "aws_instance" "app_instance" {
   done
   echo "DB_HOST=${aws_db_instance.csye6225.endpoint}" >> /opt/app/.env
   echo "DB_USER=${var.db_username}" >> /opt/app/.env
-  echo "DB_PASSWORD=${var.db_password}" >> /opt/app/.env
-  echo "DB_NAME=csye6225" >> /opt/app/.env
+  echo "DB_PASS=${var.db_password}" >> /opt/app/.env
+  echo "DB_DATABASE=csye6225" >> /opt/app/.env
   echo "PORT=${var.app_port}" >> /opt/app/.env
-  systemctl restart webapp
+  echo "Setting correct permissions for .env file..."
+  sudo chown csye6225:csye6225 /opt/app/.env
+  sudo chmod 600 /opt/app/.env
+  sleep 5
+  sudo systemctl restart webapp
   EOF
   )
 
