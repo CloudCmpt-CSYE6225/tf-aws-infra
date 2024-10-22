@@ -221,19 +221,58 @@ resource "aws_instance" "app_instance" {
   }
   user_data = base64encode(<<EOF
   #!/bin/bash
+
+  # Function to log messages
+  log() {
+      echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | sudo tee -a /var/log/user-data.log
+  }
+
+  log "Starting user data script execution"
+
+  # Wait for RDS to be available
   while ! nc -z ${aws_db_instance.csye6225.endpoint} 3306; do
-    sleep 10
+      log "Waiting for database to be available..."
+      sleep 10
   done
-  echo "DB_HOST=${aws_db_instance.csye6225.endpoint}" >> /opt/app/.env
-  echo "DB_USER=${var.db_username}" >> /opt/app/.env
-  echo "DB_PASS=${var.db_password}" >> /opt/app/.env
-  echo "DB_DATABASE=csye6225" >> /opt/app/.env
-  echo "PORT=${var.app_port}" >> /opt/app/.env
-  echo "Setting correct permissions for .env file..."
+
+  log "Database is available, configuring application"
+
+  # Create or update .env file
+  cat << EOT > /tmp/new_env
+  DB_HOST=${aws_db_instance.csye6225.endpoint}
+  DB_USER=${var.db_username}
+  DB_PASS=${var.db_password}
+  DB_DATABASE=csye6225
+  PORT=${var.app_port}
+  EOT
+
+  # Check if .env file exists and update it, or create a new one
+  if [ -f /opt/app/.env ]; then
+      log "Updating existing .env file"
+      sudo cp /opt/app/.env /opt/app/.env.bak
+      sudo cp /tmp/new_env /opt/app/.env
+  else
+      log "Creating new .env file"
+      sudo cp /tmp/new_env /opt/app/.env
+  fi
+
+  # Remove temporary file
+  rm /tmp/new_env
+
+  log "Setting correct permissions for .env file"
   sudo chown csye6225:csye6225 /opt/app/.env
   sudo chmod 600 /opt/app/.env
+
+  log "Restarting webapp service"
   sleep 5
-  sudo systemctl restart webapp
+  if sudo systemctl restart webapp; then
+      log "Webapp service restarted successfully"
+  else
+      log "Failed to restart webapp service"
+      exit 1
+  fi
+
+  log "User data script completed successfully"
   EOF
   )
 
