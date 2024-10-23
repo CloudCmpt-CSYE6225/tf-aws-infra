@@ -206,6 +206,36 @@ resource "aws_db_instance" "csye6225" {
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
 }
+
+# IAM Role for EC2 Instance
+resource "aws_iam_role" "ec2_role" {
+  name = "ec2_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_role_policy" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSFullAccess"
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2_profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# EC2 Instance
 resource "aws_instance" "app_instance" {
   ami                     = var.custom_ami_id
   instance_type           = "t2.micro"
@@ -213,67 +243,99 @@ resource "aws_instance" "app_instance" {
   vpc_security_group_ids  = [aws_security_group.app_sg.id]
   depends_on              = [aws_db_instance.csye6225]
   disable_api_termination = false
+  iam_instance_profile    = aws_iam_instance_profile.ec2_profile.name
 
   root_block_device {
     volume_size           = 25
     volume_type           = "gp2"
     delete_on_termination = true
   }
-  user_data = base64encode(<<EOF
-  #!/bin/bash
 
-  # Function to log messages
-  log() {
-      echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | sudo tee -a /var/log/user-data.log
-  }
+  user_data = base64encode(<<-EOF
+#!/bin/bash
+set -x  
+set -e
 
-  log "Starting user data script execution"
+# Function to log messages
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | sudo tee -a /var/log/user-data.log
+}
 
-  # Wait for RDS to be available
-  while ! nc -z ${aws_db_instance.csye6225.endpoint} 3306; do
-      log "Waiting for database to be available..."
-      sleep 10
-  done
+log "Starting user data script execution"
 
-  log "Database is available, configuring application"
+# Wait for RDS to be available
+timeout=300
+end_time=$((SECONDS + timeout))
+while ! nc -z ${aws_db_instance.csye6225.address} 3306; do
+    if [ $SECONDS -ge $end_time ]; then
+        log "Timeout waiting for database to become available"
+        exit 1
+    fi
+    log "Waiting for database to be available..."
+    sleep 10
+done
 
-  # Create or update .env file
-  cat << EOT > /tmp/new_env
-  DB_HOST=${aws_db_instance.csye6225.endpoint}
-  DB_USER=${var.db_username}
-  DB_PASS=${var.db_password}
-  DB_DATABASE=csye6225
-  PORT=${var.app_port}
-  EOT
+log "Database is available, configuring application"
 
-  # Check if .env file exists and update it, or create a new one
-  if [ -f /opt/app/.env ]; then
-      log "Updating existing .env file"
-      sudo cp /opt/app/.env /opt/app/.env.bak
-      sudo cp /tmp/new_env /opt/app/.env
-  else
-      log "Creating new .env file"
-      sudo cp /tmp/new_env /opt/app/.env
-  fi
+# Debug: Print current working directory and contents
+log "Current working directory: $(pwd)"
+log "Contents of /opt/app: $(ls -la /opt/app)"
 
-  # Remove temporary file
-  rm /tmp/new_env
+# Create or update .env file with debug logging
+log "Creating temporary .env file"
+sudo bash -c "cat > /tmp/new_env << EOT
+DB_HOST=${aws_db_instance.csye6225.address}
+DB_PORT=3306
+DB_USER=${var.db_username}
+DB_PASS=${var.db_password}
+DB_DATABASE=${aws_db_instance.csye6225.db_name}
+PORT=${var.app_port}
+EOT"
 
-  log "Setting correct permissions for .env file"
-  sudo chown csye6225:csye6225 /opt/app/.env
-  sudo chmod 600 /opt/app/.env
+log "Contents of temporary file:"
+cat /tmp/new_env | sudo tee -a /var/log/user-data.log
 
-  log "Restarting webapp service"
-  sleep 5
-  if sudo systemctl restart webapp; then
-      log "Webapp service restarted successfully"
-  else
-      log "Failed to restart webapp service"
-      exit 1
-  fi
+# Check if .env file exists and update it, or create a new one
+if [ -f /opt/app/.env ]; then
+    log "Existing .env file found, creating backup"
+    sudo cp /opt/app/.env /opt/app/.env.bak
+    log "Updating .env file"
+    sudo cp /tmp/new_env /opt/app/.env
+else
+    log "No existing .env file found, creating new one"
+    sudo mkdir -p /opt/app
+    sudo cp /tmp/new_env /opt/app/.env
+fi
 
-  log "User data script completed successfully"
-  EOF
+# Verify the file was created and has content
+log "Verifying .env file contents:"
+sudo cat /opt/app/.env | sudo tee -a /var/log/user-data.log
+
+# Remove temporary file
+log "Removing temporary file"
+sudo rm -f /tmp/new_env
+
+log "Setting correct permissions for .env file"
+sudo chown csye6225:csye6225 /opt/app/.env
+sudo chmod 600 /opt/app/.env
+
+# Verify permissions
+log "Verifying file permissions:"
+ls -l /opt/app/.env | sudo tee -a /var/log/user-data.log
+
+log "Restarting webapp service"
+sleep 5
+if sudo systemctl restart webapp; then
+    log "Webapp service restarted successfully"
+    sudo systemctl status webapp | sudo tee -a /var/log/user-data.log
+else
+    log "Failed to restart webapp service"
+    sudo systemctl status webapp | sudo tee -a /var/log/user-data.log
+    exit 1
+fi
+
+log "User data script completed successfully"
+EOF
   )
 
   tags = {
