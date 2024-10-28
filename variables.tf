@@ -35,3 +35,22 @@ variable "db_password" {
   type        = string
   description = "Password for the RDS instance"
 }
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID"
+  type        = string
+}
+
+variable "domain_name" {
+  description = "Base domain name"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment (dev or demo)"
+  type        = string
+  validation {
+    condition     = contains(["dev", "demo"], var.environment)
+    error_message = "Environment must be either 'dev' or 'demo'."
+  }
+}
