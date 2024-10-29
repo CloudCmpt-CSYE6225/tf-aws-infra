@@ -171,7 +171,7 @@ resource "aws_s3_bucket" "app_bucket" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "bucket_encryption" {
-  bucket = aws_s3_bucket.app_bucket.id
+  bucket = aws_s3_bucket.app_bucket.bucket
 
   rule {
     apply_server_side_encryption_by_default {
@@ -181,7 +181,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "bucket_encryption
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
-  bucket = aws_s3_bucket.app_bucket.id
+  bucket = aws_s3_bucket.app_bucket.bucket
 
   rule {
     id     = "transition-to-ia"
@@ -358,6 +358,7 @@ resource "aws_instance" "app_instance" {
     db_password = var.db_password
     db_name     = aws_db_instance.csye6225.db_name
     app_port    = var.app_port
+    s3_bucket   = aws_s3_bucket.app_bucket.bucket
   }))
 
   tags = {

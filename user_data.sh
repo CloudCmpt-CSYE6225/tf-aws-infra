@@ -105,6 +105,7 @@ DB_USER=${db_username}
 DB_PASS=${db_password}
 DB_DATABASE=${db_name}
 PORT=${app_port}
+S3_BUCKET=${s3_bucket}
 EOT"
 
 # Check if .env file exists and update it
