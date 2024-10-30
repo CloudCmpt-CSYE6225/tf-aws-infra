@@ -370,15 +370,15 @@ resource "aws_instance" "app_instance" {
   }
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    db_host          = aws_db_instance.csye6225.address
-    db_username      = var.db_username
-    db_password      = var.db_password
-    db_name          = aws_db_instance.csye6225.db_name
-    app_port         = var.app_port
-    s3_bucket        = aws_s3_bucket.app_bucket.bucket
-    region           = var.region
-    sendgrid_api_key = var.sendgrid_api_key
-    domain_name      = var.domain_name
+    db_host                  = aws_db_instance.csye6225.address
+    db_username              = var.db_username
+    db_password              = var.db_password
+    db_name                  = aws_db_instance.csye6225.db_name
+    app_port                 = var.app_port
+    s3_bucket                = aws_s3_bucket.app_bucket.bucket
+    region                   = var.region
+    sendgrid_api_key         = var.sendgrid_api_key
+    domain_name              = var.domain_name
     sendgrid_verified_sender = var.sendgrid_verified_sender
   }))
 

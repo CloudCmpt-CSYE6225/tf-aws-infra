@@ -64,5 +64,5 @@ variable "sendgrid_api_key" {
 variable "sendgrid_verified_sender" {
   description = "SendGrid verified sender email"
   type        = string
-  default     = "no-reply@srijithmakam.me" 
+  default     = "no-reply@srijithmakam.me"
 }
