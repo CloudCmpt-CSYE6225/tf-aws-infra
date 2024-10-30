@@ -54,3 +54,9 @@ variable "environment" {
     error_message = "Environment must be either 'dev' or 'demo'."
   }
 }
+
+variable "sendgrid_api_key" {
+  description = "SendGrid API Key"
+  type        = string
+  sensitive   = true
+}

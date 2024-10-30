@@ -106,6 +106,9 @@ DB_PASS=${db_password}
 DB_DATABASE=${db_name}
 PORT=${app_port}
 S3_BUCKET=${s3_bucket}
+AWS_REGION=${region}
+SENDGRID_API_KEY=${sendgrid_api_key}
+DOMAIN_NAME=${domain_name}
 EOT"
 
 # Check if .env file exists and update it
