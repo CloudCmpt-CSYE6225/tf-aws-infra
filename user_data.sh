@@ -109,6 +109,7 @@ S3_BUCKET=${s3_bucket}
 AWS_REGION=${region}
 SENDGRID_API_KEY=${sendgrid_api_key}
 DOMAIN_NAME=${domain_name}
+SENDGRID_VERIFIED_SENDER=${sendgrid_verified_sender}
 EOT"
 
 # Check if .env file exists and update it

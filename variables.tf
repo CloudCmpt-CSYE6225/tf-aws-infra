@@ -60,3 +60,9 @@ variable "sendgrid_api_key" {
   type        = string
   sensitive   = true
 }
+
+variable "sendgrid_verified_sender" {
+  description = "SendGrid verified sender email"
+  type        = string
+  default     = "no-reply@srijithmakam.me" 
+}

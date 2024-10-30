@@ -231,15 +231,15 @@ resource "aws_route53_record" "app_dns" {
 
 resource "aws_route53_record" "sendgrid_dkim" {
   zone_id = var.route53_zone_id
-  name    = "s1._domainkey.${var.domain_name}"
+  name    = "s1._domainkey"
   type    = "CNAME"
   ttl     = "300"
-  records = ["s1.domainkey.${var.domain_name}.sendgrid.net"]
+  records = ["s1.domainkey.${var.domain_name}.sendgrid.net."]
 }
 
 resource "aws_route53_record" "sendgrid_spf" {
   zone_id = var.route53_zone_id
-  name    = var.domain_name
+  name    = ""
   type    = "TXT"
   ttl     = "300"
   records = ["v=spf1 include:sendgrid.net ~all"]
@@ -379,6 +379,7 @@ resource "aws_instance" "app_instance" {
     region           = var.region
     sendgrid_api_key = var.sendgrid_api_key
     domain_name      = var.domain_name
+    sendgrid_verified_sender = var.sendgrid_verified_sender
   }))
 
   tags = {
