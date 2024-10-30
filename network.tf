@@ -161,6 +161,90 @@ resource "aws_security_group" "db_sg" {
   }
 }
 
+resource "random_uuid" "bucket_name" {
+}
+
+# S3 Bucket Configuration
+resource "aws_s3_bucket" "app_bucket" {
+  bucket        = random_uuid.bucket_name.result
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "bucket_encryption" {
+  bucket = aws_s3_bucket.app_bucket.bucket
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
+  bucket = aws_s3_bucket.app_bucket.bucket
+
+  rule {
+    id     = "transition-to-ia"
+    status = "Enabled"
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+  }
+}
+
+# Update the existing IAM role with S3 permissions
+resource "aws_iam_role_policy" "s3_access_policy" {
+  name = "s3_access_policy"
+  role = aws_iam_role.ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          aws_s3_bucket.app_bucket.arn,
+          "${aws_s3_bucket.app_bucket.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Route 53 Configuration
+resource "aws_route53_record" "app_dns" {
+  zone_id = var.route53_zone_id
+  name    = var.environment == "dev" ? "dev.${var.domain_name}" : "demo.${var.domain_name}"
+  type    = "A"
+  ttl     = 300
+  records = [aws_instance.app_instance.public_ip]
+}
+
+
+resource "aws_route53_record" "sendgrid_dkim" {
+  zone_id = var.route53_zone_id
+  name    = "s1._domainkey"
+  type    = "CNAME"
+  ttl     = "300"
+  records = ["s1.domainkey.${var.domain_name}.sendgrid.net."]
+}
+
+resource "aws_route53_record" "sendgrid_spf" {
+  zone_id = var.route53_zone_id
+  name    = ""
+  type    = "TXT"
+  ttl     = "300"
+  records = ["v=spf1 include:sendgrid.net ~all"]
+}
+
 # RDS Parameter Group
 resource "aws_db_parameter_group" "custom_pg" {
   family = "mysql8.0"
@@ -225,6 +309,40 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
+# CloudWatch IAM Policy
+resource "aws_iam_role_policy" "cloudwatch_policy" {
+  name = "cloudwatch_policy"
+  role = aws_iam_role.ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "app_log_group" {
+  name              = "/webapp/logs"
+  retention_in_days = 7
+}
+
+
 resource "aws_iam_role_policy_attachment" "ec2_role_policy" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonRDSFullAccess"
@@ -251,92 +369,18 @@ resource "aws_instance" "app_instance" {
     delete_on_termination = true
   }
 
-  user_data = base64encode(<<-EOF
-#!/bin/bash
-set -x  
-set -e
-
-# Function to log messages
-log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | sudo tee -a /var/log/user-data.log
-}
-
-log "Starting user data script execution"
-
-# Wait for RDS to be available
-timeout=300
-end_time=$((SECONDS + timeout))
-while ! nc -z ${aws_db_instance.csye6225.address} 3306; do
-    if [ $SECONDS -ge $end_time ]; then
-        log "Timeout waiting for database to become available"
-        exit 1
-    fi
-    log "Waiting for database to be available..."
-    sleep 10
-done
-
-log "Database is available, configuring application"
-
-# Debug: Print current working directory and contents
-log "Current working directory: $(pwd)"
-log "Contents of /opt/app: $(ls -la /opt/app)"
-
-# Create or update .env file with debug logging
-log "Creating temporary .env file"
-sudo bash -c "cat > /tmp/new_env << EOT
-DB_HOST=${aws_db_instance.csye6225.address}
-DB_PORT=3306
-DB_USER=${var.db_username}
-DB_PASS=${var.db_password}
-DB_DATABASE=${aws_db_instance.csye6225.db_name}
-PORT=${var.app_port}
-EOT"
-
-log "Contents of temporary file:"
-cat /tmp/new_env | sudo tee -a /var/log/user-data.log
-
-# Check if .env file exists and update it, or create a new one
-if [ -f /opt/app/.env ]; then
-    log "Existing .env file found, creating backup"
-    sudo cp /opt/app/.env /opt/app/.env.bak
-    log "Updating .env file"
-    sudo cp /tmp/new_env /opt/app/.env
-else
-    log "No existing .env file found, creating new one"
-    sudo mkdir -p /opt/app
-    sudo cp /tmp/new_env /opt/app/.env
-fi
-
-# Verify the file was created and has content
-log "Verifying .env file contents:"
-sudo cat /opt/app/.env | sudo tee -a /var/log/user-data.log
-
-# Remove temporary file
-log "Removing temporary file"
-sudo rm -f /tmp/new_env
-
-log "Setting correct permissions for .env file"
-sudo chown csye6225:csye6225 /opt/app/.env
-sudo chmod 600 /opt/app/.env
-
-# Verify permissions
-log "Verifying file permissions:"
-ls -l /opt/app/.env | sudo tee -a /var/log/user-data.log
-
-log "Restarting webapp service"
-sleep 5
-if sudo systemctl restart webapp; then
-    log "Webapp service restarted successfully"
-    sudo systemctl status webapp | sudo tee -a /var/log/user-data.log
-else
-    log "Failed to restart webapp service"
-    sudo systemctl status webapp | sudo tee -a /var/log/user-data.log
-    exit 1
-fi
-
-log "User data script completed successfully"
-EOF
-  )
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    db_host                  = aws_db_instance.csye6225.address
+    db_username              = var.db_username
+    db_password              = var.db_password
+    db_name                  = aws_db_instance.csye6225.db_name
+    app_port                 = var.app_port
+    s3_bucket                = aws_s3_bucket.app_bucket.bucket
+    region                   = var.region
+    sendgrid_api_key         = var.sendgrid_api_key
+    domain_name              = var.domain_name
+    sendgrid_verified_sender = var.sendgrid_verified_sender
+  }))
 
   tags = {
     Name = "web-application-instance"
