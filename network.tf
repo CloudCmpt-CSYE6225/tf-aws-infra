@@ -527,34 +527,6 @@ resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
   }
 }
 
-# # Scale-up policy with TargetTrackingScaling
-# resource "aws_autoscaling_policy" "scale_up" {
-#   name                   = "scale-up"
-#   autoscaling_group_name = aws_autoscaling_group.app_asg.name
-#   policy_type            = "TargetTrackingScaling"
-
-#   target_tracking_configuration {
-#     predefined_metric_specification {
-#       predefined_metric_type = "ASGAverageCPUUtilization"
-#     }
-#     target_value = 5.0
-#   }
-# }
-
-# # Scale-down policy with TargetTrackingScaling
-# resource "aws_autoscaling_policy" "scale_down" {
-#   name                   = "scale-down"
-#   autoscaling_group_name = aws_autoscaling_group.app_asg.name
-#   policy_type            = "TargetTrackingScaling"
-
-#   target_tracking_configuration {
-#     predefined_metric_specification {
-#       predefined_metric_type = "ASGAverageCPUUtilization"
-#     }
-#     target_value = 3.0
-#   }
-# }
-
 # Application Load Balancer
 resource "aws_lb" "app_lb" {
   name               = "webapp-alb"
