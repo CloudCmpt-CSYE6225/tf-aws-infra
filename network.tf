@@ -98,31 +98,31 @@ resource "aws_security_group" "app_sg" {
   vpc_id      = aws_vpc.main[0].id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lb_sg.id]
   }
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lb_sg.id]
   }
 
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lb_sg.id]
   }
 
   ingress {
-    from_port   = var.app_port
-    to_port     = var.app_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = var.app_port
+    to_port         = var.app_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lb_sg.id]
   }
 
   egress {
@@ -158,6 +158,38 @@ resource "aws_security_group" "db_sg" {
 
   tags = {
     Name = "database-security-group"
+  }
+}
+
+#Load Balancer security group
+resource "aws_security_group" "lb_sg" {
+  name        = "load-balancer-security-group"
+  description = "Security group for load balancer"
+  vpc_id      = aws_vpc.main[0].id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "load-balancer-security-group"
   }
 }
 
@@ -219,14 +251,14 @@ resource "aws_iam_role_policy" "s3_access_policy" {
   })
 }
 
-# Route 53 Configuration
-resource "aws_route53_record" "app_dns" {
-  zone_id = var.route53_zone_id
-  name    = var.environment == "dev" ? "dev.${var.domain_name}" : "demo.${var.domain_name}"
-  type    = "A"
-  ttl     = 300
-  records = [aws_instance.app_instance.public_ip]
-}
+# # Route 53 Configuration
+# resource "aws_route53_record" "app_dns" {
+#   zone_id = var.route53_zone_id
+#   name    = var.environment == "dev" ? "dev.${var.domain_name}" : "demo.${var.domain_name}"
+#   type    = "A"
+#   ttl     = 300
+#   records = [aws_instance.app_instance.public_ip]
+# }
 
 
 resource "aws_route53_record" "sendgrid_dkim" {
@@ -353,20 +385,55 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 }
 
-# EC2 Instance
-resource "aws_instance" "app_instance" {
-  ami                     = var.custom_ami_id
-  instance_type           = "t2.micro"
-  subnet_id               = aws_subnet.public[0].id
-  vpc_security_group_ids  = [aws_security_group.app_sg.id]
-  depends_on              = [aws_db_instance.csye6225]
-  disable_api_termination = false
-  iam_instance_profile    = aws_iam_instance_profile.ec2_profile.name
+# # EC2 Instance
+# resource "aws_instance" "app_instance" {
+#   ami                     = var.custom_ami_id
+#   instance_type           = "t2.micro"
+#   subnet_id               = aws_subnet.public[0].id
+#   vpc_security_group_ids  = [aws_security_group.app_sg.id]
+#   depends_on              = [aws_db_instance.csye6225]
+#   disable_api_termination = false
+#   iam_instance_profile    = aws_iam_instance_profile.ec2_profile.name
 
-  root_block_device {
-    volume_size           = 25
-    volume_type           = "gp2"
-    delete_on_termination = true
+#   root_block_device {
+#     volume_size           = 25
+#     volume_type           = "gp2"
+#     delete_on_termination = true
+#   }
+
+#   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+#     db_host                  = aws_db_instance.csye6225.address
+#     db_username              = var.db_username
+#     db_password              = var.db_password
+#     db_name                  = aws_db_instance.csye6225.db_name
+#     app_port                 = var.app_port
+#     s3_bucket                = aws_s3_bucket.app_bucket.bucket
+#     region                   = var.region
+#     sendgrid_api_key         = var.sendgrid_api_key
+#     domain_name              = var.domain_name
+#     sendgrid_verified_sender = var.sendgrid_verified_sender
+#   }))
+
+#   tags = {
+#     Name = "web-application-instance"
+#   }
+# }
+
+# Launch Template
+resource "aws_launch_template" "app_template" {
+  name = "csye6225_asg"
+
+  image_id      = var.custom_ami_id
+  instance_type = "t2.micro"
+  key_name      = "AWS"
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.app_sg.id]
+  }
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
   }
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
@@ -382,7 +449,162 @@ resource "aws_instance" "app_instance" {
     sendgrid_verified_sender = var.sendgrid_verified_sender
   }))
 
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "webapp-asg-instance"
+    }
+  }
+}
+
+# Auto Scaling Group
+resource "aws_autoscaling_group" "app_asg" {
+  name                = "webapp-asg"
+  desired_capacity    = 1
+  max_size            = 3
+  min_size            = 1
+  target_group_arns   = [aws_lb_target_group.app_tg.arn]
+  vpc_zone_identifier = aws_subnet.public[*].id
+  default_cooldown    = 60
+
+  launch_template {
+    id      = aws_launch_template.app_template.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "webapp-asg-instance"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "scale-up-policy"
+  autoscaling_group_name = aws_autoscaling_group.app_asg.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = 1 # Increase by one instance
+  cooldown               = 60
+}
+
+resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
+  alarm_name          = "scale-up-alarm"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60" # Check every minute
+  statistic           = "Average"
+  threshold           = "5"                                   # Trigger when CPU exceeds 5%
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn] # Link to scale-up policy
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_asg.name
+  }
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "scale-down-policy"
+  autoscaling_group_name = aws_autoscaling_group.app_asg.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = -1 # Decrease by one instance
+  cooldown               = 60
+}
+
+resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
+  alarm_name          = "scale-down-alarm"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60" # Check every minute
+  statistic           = "Average"
+  threshold           = "3"                                     # Trigger when CPU falls below 3%
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn] # Link to scale-down policy
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_asg.name
+  }
+}
+
+# # Scale-up policy with TargetTrackingScaling
+# resource "aws_autoscaling_policy" "scale_up" {
+#   name                   = "scale-up"
+#   autoscaling_group_name = aws_autoscaling_group.app_asg.name
+#   policy_type            = "TargetTrackingScaling"
+
+#   target_tracking_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ASGAverageCPUUtilization"
+#     }
+#     target_value = 5.0
+#   }
+# }
+
+# # Scale-down policy with TargetTrackingScaling
+# resource "aws_autoscaling_policy" "scale_down" {
+#   name                   = "scale-down"
+#   autoscaling_group_name = aws_autoscaling_group.app_asg.name
+#   policy_type            = "TargetTrackingScaling"
+
+#   target_tracking_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ASGAverageCPUUtilization"
+#     }
+#     target_value = 3.0
+#   }
+# }
+
+# Application Load Balancer
+resource "aws_lb" "app_lb" {
+  name               = "webapp-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.lb_sg.id]
+  subnets            = aws_subnet.public[*].id
+
   tags = {
-    Name = "web-application-instance"
+    Name = "webapp-alb"
+  }
+}
+
+resource "aws_lb_target_group" "app_tg" {
+  name     = "webapp-tg"
+  port     = var.app_port
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main[0].id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    timeout             = 5
+    path                = "/healthz"
+    port                = var.app_port
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_lb_listener" "front_end" {
+  load_balancer_arn = aws_lb.app_lb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+}
+
+# Update Route53 to point to ALB
+resource "aws_route53_record" "app_dns" {
+  zone_id = var.route53_zone_id
+  name    = var.environment == "dev" ? "dev.${var.domain_name}" : "demo.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.app_lb.dns_name
+    zone_id                = aws_lb.app_lb.zone_id
+    evaluate_target_health = true
   }
 }

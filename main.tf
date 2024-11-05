@@ -1,38 +1,41 @@
-# Outputs
-output "vpc_ids" {
-  description = "IDs of the created VPCs"
-  value       = aws_vpc.main[*].id
+# Output for VPC ID
+output "vpc_id" {
+  description = "The ID of the VPC"
+  value       = aws_vpc.main[0].id
 }
 
-output "public_subnet_ids" {
-  description = "IDs of the created public subnets"
+# Output for Public Subnets
+output "public_subnets" {
+  description = "List of public subnet IDs"
   value       = aws_subnet.public[*].id
 }
 
-output "private_subnet_ids" {
-  description = "IDs of the created private subnets"
+# Output for Private Subnets
+output "private_subnets" {
+  description = "List of private subnet IDs"
   value       = aws_subnet.private[*].id
 }
 
-output "internet_gateway_ids" {
-  description = "IDs of the created Internet Gateways"
-  value       = aws_internet_gateway.main[*].id
+# Output for Load Balancer DNS Name
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer"
+  value       = aws_lb.app_lb.dns_name
 }
 
-output "public_route_table_ids" {
-  description = "IDs of the public route tables"
-  value       = aws_route_table.public[*].id
+# Output for Auto Scaling Group Name
+output "autoscaling_group_name" {
+  description = "Name of the Auto Scaling Group"
+  value       = aws_autoscaling_group.app_asg.name
 }
 
-output "private_route_table_ids" {
-  description = "IDs of the private route tables"
-  value       = aws_route_table.private[*].id
+# Output for S3 Bucket Name
+output "s3_bucket_name" {
+  description = "Name of the S3 bucket"
+  value       = aws_s3_bucket.app_bucket.bucket
 }
 
-output "ec2_public_ip" {
-  value = aws_instance.app_instance.public_ip
-}
-
-output "rds_endpoint" {
-  value = aws_db_instance.csye6225.endpoint
+# Output for Route53 Record (DNS)
+output "route53_record" {
+  description = "The Route53 DNS record pointing to Load Balancer"
+  value       = aws_route53_record.app_dns.name
 }
