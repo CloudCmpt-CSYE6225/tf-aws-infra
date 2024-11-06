@@ -104,19 +104,19 @@ resource "aws_security_group" "app_sg" {
     security_groups = [aws_security_group.lb_sg.id]
   }
 
-  ingress {
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lb_sg.id]
-  }
+  # ingress {
+  #   from_port       = 80
+  #   to_port         = 80
+  #   protocol        = "tcp"
+  #   security_groups = [aws_security_group.lb_sg.id]
+  # }
 
-  ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lb_sg.id]
-  }
+  # ingress {
+  #   from_port       = 443
+  #   to_port         = 443
+  #   protocol        = "tcp"
+  #   security_groups = [aws_security_group.lb_sg.id]
+  # }
 
   ingress {
     from_port       = var.app_port
@@ -460,9 +460,9 @@ resource "aws_launch_template" "app_template" {
 # Auto Scaling Group
 resource "aws_autoscaling_group" "app_asg" {
   name                = "webapp-asg"
-  desired_capacity    = 1
-  max_size            = 3
-  min_size            = 1
+  desired_capacity    = 3
+  max_size            = 5
+  min_size            = 3
   target_group_arns   = [aws_lb_target_group.app_tg.arn]
   vpc_zone_identifier = aws_subnet.public[*].id
   default_cooldown    = 60
