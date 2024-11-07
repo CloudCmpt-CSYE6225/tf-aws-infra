@@ -66,3 +66,54 @@ variable "sendgrid_verified_sender" {
   type        = string
   default     = "no-reply@srijithmakam.me"
 }
+
+variable "desired_capacity" {
+  description = "Desired capacity of the autoscaling group"
+  type        = number
+  default     = 3
+}
+
+variable "max_capacity" {
+  description = "Maximum capacity of the autoscaling group"
+  type        = number
+  default     = 5
+}
+
+variable "min_capacity" {
+  description = "Minimum capacity of the autoscaling group"
+  type        = number
+  default     = 3
+
+}
+
+variable "scale_up_threshold" {
+  description = "Scale up threshold for the autoscaling group"
+  type        = string
+  default     = "9"
+}
+
+variable "scale_down_threshold" {
+  description = "Scale down threshold for the autoscaling group"
+  type        = string
+  default     = "7"
+
+}
+
+variable "scale_down_adjustment" {
+  description = "Scale down adjustment for the autoscaling group"
+  type        = number
+  default     = -1
+}
+
+variable "scale_up_adjustment" {
+  description = "Scale up adjustment for the autoscaling group"
+  type        = number
+  default     = 1
+}
+
+variable "cooldown" {
+  description = "Cooldown period for the autoscaling group"
+  type        = number
+  default     = 60
+
+}

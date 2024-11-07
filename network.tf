@@ -460,12 +460,12 @@ resource "aws_launch_template" "app_template" {
 # Auto Scaling Group
 resource "aws_autoscaling_group" "app_asg" {
   name                = "webapp-asg"
-  desired_capacity    = 3
-  max_size            = 5
-  min_size            = 3
+  desired_capacity    = var.desired_capacity
+  max_size            = var.max_capacity
+  min_size            = var.min_capacity
   target_group_arns   = [aws_lb_target_group.app_tg.arn]
   vpc_zone_identifier = aws_subnet.public[*].id
-  default_cooldown    = 60
+  default_cooldown    = var.cooldown
 
   launch_template {
     id      = aws_launch_template.app_template.id
@@ -483,8 +483,8 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "scale-up-policy"
   autoscaling_group_name = aws_autoscaling_group.app_asg.name
   adjustment_type        = "ChangeInCapacity"
-  scaling_adjustment     = 1
-  cooldown               = 60
+  scaling_adjustment     = var.scale_up_adjustment
+  cooldown               = var.cooldown
 }
 
 resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
@@ -495,7 +495,7 @@ resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
   namespace           = "AWS/EC2"
   period              = "60"
   statistic           = "Average"
-  threshold           = "9"
+  threshold           = var.scale_up_threshold
   alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
 
   dimensions = {
@@ -507,8 +507,8 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "scale-down-policy"
   autoscaling_group_name = aws_autoscaling_group.app_asg.name
   adjustment_type        = "ChangeInCapacity"
-  scaling_adjustment     = -1
-  cooldown               = 60
+  scaling_adjustment     = var.scale_down_adjustment
+  cooldown               = var.cooldown
 }
 
 resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
@@ -519,7 +519,7 @@ resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
   namespace           = "AWS/EC2"
   period              = "60"
   statistic           = "Average"
-  threshold           = "7"
+  threshold           = var.scale_down_threshold
   alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
 
   dimensions = {
@@ -549,7 +549,7 @@ resource "aws_lb_target_group" "app_tg" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 120
     timeout             = 5
     path                = "/healthz"
     port                = var.app_port
