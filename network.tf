@@ -73,6 +73,12 @@ resource "aws_route_table" "private" {
   count  = var.vpc_count
   vpc_id = aws_vpc.main[count.index].id
 
+  # Add a route to direct all outbound traffic to the NAT Gateway
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id # Reference to NAT Gateway 
+  }
+
   tags = {
     Name = "${var.project_name}-private-rt-${count.index + 1}"
   }
@@ -143,10 +149,13 @@ resource "aws_security_group" "db_sg" {
   vpc_id      = aws_vpc.main[0].id
 
   ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app_sg.id]
+    from_port = 3306
+    to_port   = 3306
+    protocol  = "tcp"
+    security_groups = [
+      aws_security_group.app_sg.id,
+      aws_security_group.lambda_sg.id
+    ]
   }
 
   egress {
@@ -421,45 +430,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 #   }
 # }
 
-# Launch Template
-resource "aws_launch_template" "app_template" {
-  name = "csye6225_asg"
-
-  image_id      = var.custom_ami_id
-  instance_type = "t2.micro"
-  key_name      = "AWS"
-
-  network_interfaces {
-    associate_public_ip_address = true
-    security_groups             = [aws_security_group.app_sg.id]
-  }
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
-  }
-
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    db_host                  = aws_db_instance.csye6225.address
-    db_username              = var.db_username
-    db_password              = var.db_password
-    db_name                  = aws_db_instance.csye6225.db_name
-    app_port                 = var.app_port
-    s3_bucket                = aws_s3_bucket.app_bucket.bucket
-    region                   = var.region
-    sendgrid_api_key         = var.sendgrid_api_key
-    domain_name              = var.domain_name
-    sendgrid_verified_sender = var.sendgrid_verified_sender
-    sns_topic_arn            = aws_sns_topic.my_topic.arn
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "webapp-asg-instance"
-    }
-  }
-}
-
 # Auto Scaling Group
 resource "aws_autoscaling_group" "app_asg" {
   name                = "webapp-asg"
@@ -584,9 +554,38 @@ resource "aws_route53_record" "app_dns" {
   }
 }
 
+#elastic ip for nat gateway
+resource "aws_eip" "nat_eip" {
+  domain = "vpc"
+}
+
+# NAT Gateway in public subnet
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.public[0].id # Ensure this is a public subnet
+}
 
 resource "aws_sns_topic" "my_topic" {
   name = "my-sns-topic"
+}
+
+# Security group for Lambda function
+resource "aws_security_group" "lambda_sg" {
+  name        = "lambda-security-group"
+  description = "Security group for Lambda function"
+  vpc_id      = aws_vpc.main[0].id
+
+  # Allow outbound traffic from Lambda to connect to RDS on port 3306 
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"] # Allow outbound traffic 
+  }
+
+  tags = {
+    Name = "lambda-security-group"
+  }
 }
 
 resource "aws_lambda_function" "my_lambda_function" {
@@ -595,17 +594,30 @@ resource "aws_lambda_function" "my_lambda_function" {
   role          = aws_iam_role.lambda_exec_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
+  timeout       = 30
 
   environment {
     variables = {
-      DB_HOST          = aws_db_instance.csye6225.address
-      DB_USER          = var.db_username
-      DB_PASSWORD      = var.db_password
-      SENDGRID_API_KEY = var.sendgrid_api_key
+      DB_HOST                  = aws_db_instance.csye6225.address
+      DB_USER                  = var.db_username
+      DB_PASS                  = var.db_password
+      DB_DATABASE              = aws_db_instance.csye6225.db_name
+      SENDGRID_API_KEY         = var.sendgrid_api_key
+      SENDGRID_VERIFIED_SENDER = var.sendgrid_verified_sender
+      SNS_TOPIC_ARN            = aws_sns_topic.my_topic.arn
+      REGION                   = var.region
     }
   }
 
-  depends_on = [aws_iam_role_policy_attachment.lambda_policy_attachment]
+  vpc_config {
+    subnet_ids         = aws_subnet.private[*].id          # Private subnets where RDS is located
+    security_group_ids = [aws_security_group.lambda_sg.id] # Security group for Lambda function
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_policy_attachment,
+    aws_sns_topic.my_topic
+  ]
 }
 
 resource "aws_lambda_permission" "allow_sns_invoke" {
@@ -667,4 +679,50 @@ resource "aws_iam_policy" "lambda_policy" {
 resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
   role       = aws_iam_role.lambda_exec_role.name
   policy_arn = aws_iam_policy.lambda_policy.arn
+}
+
+# New policy attachment for AWSLambdaVPCAccessExecutionRole
+resource "aws_iam_role_policy_attachment" "lambda_vpc_access_policy" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+
+# Launch Template
+resource "aws_launch_template" "app_template" {
+  name = "csye6225_asg"
+
+  image_id      = var.custom_ami_id
+  instance_type = "t2.micro"
+  key_name      = "AWS"
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.app_sg.id]
+  }
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    db_host                  = aws_db_instance.csye6225.address
+    db_username              = var.db_username
+    db_password              = var.db_password
+    db_name                  = aws_db_instance.csye6225.db_name
+    app_port                 = var.app_port
+    s3_bucket                = aws_s3_bucket.app_bucket.bucket
+    region                   = var.region
+    sendgrid_api_key         = var.sendgrid_api_key
+    domain_name              = var.domain_name
+    sendgrid_verified_sender = var.sendgrid_verified_sender
+    sns_topic_arn            = aws_sns_topic.my_topic.arn
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "webapp-asg-instance"
+    }
+  }
 }
