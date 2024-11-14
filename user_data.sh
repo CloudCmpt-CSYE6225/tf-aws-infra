@@ -90,6 +90,7 @@ AWS_REGION=${region}
 SENDGRID_API_KEY=${sendgrid_api_key}
 DOMAIN_NAME=${domain_name}
 SENDGRID_VERIFIED_SENDER=${sendgrid_verified_sender}
+SNS_TOPIC_ARN = ${sns_topic_arn}
 EOT"
 
 # Check if .env file exists and update it

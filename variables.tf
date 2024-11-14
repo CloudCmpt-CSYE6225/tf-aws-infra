@@ -117,3 +117,8 @@ variable "cooldown" {
   default     = 60
 
 }
+
+variable "file_path" {
+  description = "Path to the file to be uploaded to S3"
+  type        = string
+}

@@ -168,17 +168,19 @@ resource "aws_security_group" "lb_sg" {
   vpc_id      = aws_vpc.main[0].id
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
@@ -447,6 +449,7 @@ resource "aws_launch_template" "app_template" {
     sendgrid_api_key         = var.sendgrid_api_key
     domain_name              = var.domain_name
     sendgrid_verified_sender = var.sendgrid_verified_sender
+    sns_topic_arn            = aws_sns_topic.my_topic.arn
   }))
 
   tag_specifications {
@@ -579,4 +582,89 @@ resource "aws_route53_record" "app_dns" {
     zone_id                = aws_lb.app_lb.zone_id
     evaluate_target_health = true
   }
+}
+
+
+resource "aws_sns_topic" "my_topic" {
+  name = "my-sns-topic"
+}
+
+resource "aws_lambda_function" "my_lambda_function" {
+  filename      = var.file_path
+  function_name = "my_lambda_function"
+  role          = aws_iam_role.lambda_exec_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs18.x"
+
+  environment {
+    variables = {
+      DB_HOST          = aws_db_instance.csye6225.address
+      DB_USER          = var.db_username
+      DB_PASSWORD      = var.db_password
+      SENDGRID_API_KEY = var.sendgrid_api_key
+    }
+  }
+
+  depends_on = [aws_iam_role_policy_attachment.lambda_policy_attachment]
+}
+
+resource "aws_lambda_permission" "allow_sns_invoke" {
+  statement_id  = "AllowExecutionFromSNS"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.my_lambda_function.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.my_topic.arn
+}
+
+resource "aws_sns_topic_subscription" "lambda_subscription" {
+  topic_arn = aws_sns_topic.my_topic.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.my_lambda_function.arn
+}
+resource "aws_iam_role" "lambda_exec_role" {
+  name = "lambda_exec_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_policy" "lambda_policy" {
+  name        = "lambda_policy"
+  description = "IAM policy for Lambda execution"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Effect   = "Allow",
+        Resource = "*"
+      },
+      {
+        Action = [
+          "sns:Publish",
+          "sns:Subscribe",
+          "sns:Receive"
+        ],
+        Effect   = "Allow",
+        Resource = aws_sns_topic.my_topic.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = aws_iam_policy.lambda_policy.arn
 }
