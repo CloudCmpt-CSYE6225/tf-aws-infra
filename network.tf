@@ -606,6 +606,7 @@ resource "aws_lambda_function" "my_lambda_function" {
       SENDGRID_VERIFIED_SENDER = var.sendgrid_verified_sender
       SNS_TOPIC_ARN            = aws_sns_topic.my_topic.arn
       REGION                   = var.region
+      environment              = var.environment
     }
   }
 
