@@ -621,6 +621,11 @@ resource "aws_lambda_function" "my_lambda_function" {
   ]
 }
 
+resource "aws_cloudwatch_log_group" "lambda_log_group" {
+  name              = "/aws/lambda/${aws_lambda_function.my_lambda_function.function_name}"
+  retention_in_days = 5 # retention period
+}
+
 resource "aws_lambda_permission" "allow_sns_invoke" {
   statement_id  = "AllowExecutionFromSNS"
   action        = "lambda:InvokeFunction"
