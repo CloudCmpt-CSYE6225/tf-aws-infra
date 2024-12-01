@@ -82,7 +82,7 @@ sudo bash -c "cat > /tmp/new_env << EOT
 DB_HOST=${db_host}
 DB_PORT=3306
 DB_USER=${db_username}
-DB_PASS=${db_password}
+DB_PASS=$(aws secretsmanager get-secret-value --secret-id rds_db_password --query SecretString --output text | jq -r .DB_PASS)
 DB_DATABASE=${db_name}
 PORT=${app_port}
 S3_BUCKET=${s3_bucket}

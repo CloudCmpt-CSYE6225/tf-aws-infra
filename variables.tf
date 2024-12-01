@@ -122,3 +122,19 @@ variable "file_path" {
   description = "Path to the file to be uploaded to S3"
   type        = string
 }
+
+variable "sendgrid_credentials_name" {
+  description = "Name of the secret in Secrets Manager"
+  type        = string
+}
+
+variable "rds_db_password" {
+  description = "Password name for the RDS instance"
+  type        = string
+
+}
+
+variable "account_id" {
+  description = "AWS Account ID"
+  type        = string
+}
