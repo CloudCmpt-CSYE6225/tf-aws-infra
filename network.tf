@@ -225,46 +225,46 @@ resource "aws_kms_key" "s3_key" {
         },
         Action   = "kms:*",
         Resource = "*"
+      },
+      {
+        Sid    = "Allow S3 Service to Use the Key",
+        Effect = "Allow",
+        Principal = {
+          AWS = [
+            "arn:aws:iam::${var.account_id}:role/lambda_exec_role",
+            "arn:aws:iam::${var.account_id}:role/ec2_role"
+          ]
         },
-        {
-          Sid    = "Allow S3 Service to Use the Key",
-          Effect = "Allow",
-          Principal = {
-            AWS = [
-              "arn:aws:iam::${var.account_id}:role/lambda_exec_role",
-              "arn:aws:iam::${var.account_id}:role/ec2_role"
-            ]
-          },
-          Action = [
-            "kms:Encrypt",
-            "kms:Decrypt",
-            "kms:ReEncrypt*",
-            "kms:GenerateDataKey*",
-            "kms:DescribeKey"
-          ],
-          Resource = "*"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ],
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow Management of Grants",
+        Effect = "Allow",
+        Principal = {
+          AWS = [
+            "arn:aws:iam::${var.account_id}:role/lambda_exec_role",
+            "arn:aws:iam::${var.account_id}:role/ec2_role"
+          ]
         },
-        {
-          Sid    = "Allow Management of Grants",
-          Effect = "Allow",
-          Principal = {
-            AWS = [
-              "arn:aws:iam::${var.account_id}:role/lambda_exec_role",
-              "arn:aws:iam::${var.account_id}:role/ec2_role"
-            ]
-          },
-          Action = [
-            "kms:CreateGrant",
-            "kms:ListGrants",
-            "kms:RevokeGrant"
-          ],
-          Resource = "*",
-          Condition = {
-            Bool : {
-              "kms:GrantIsForAWSResource" : true
-            }
+        Action = [
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
+        ],
+        Resource = "*",
+        Condition = {
+          Bool : {
+            "kms:GrantIsForAWSResource" : true
           }
         }
+      }
     ]
   })
 }
