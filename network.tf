@@ -430,8 +430,8 @@ resource "aws_kms_key" "rds_key" {
         Effect = "Allow",
         Principal = {
           AWS = [
-            "arn:aws:iam::${var.account_id}:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS", // RDS service role
-            "arn:aws:iam::${var.account_id}:role/ec2_role",                                                // Replace with your specific EC2 role name
+            "arn:aws:iam::${var.account_id}:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS",
+            "arn:aws:iam::${var.account_id}:role/ec2_role",
             "arn:aws:iam::${var.account_id}:role/lambda_exec_role"
           ]
         },
@@ -449,8 +449,8 @@ resource "aws_kms_key" "rds_key" {
         Effect = "Allow",
         Principal = {
           AWS = [
-            "arn:aws:iam::${var.account_id}:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS", // RDS service role
-            "arn:aws:iam::${var.account_id}:role/ec2_role",                                                // Replace with your specific EC2 role name
+            "arn:aws:iam::${var.account_id}:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS",
+            "arn:aws:iam::${var.account_id}:role/ec2_role",
             "arn:aws:iam::${var.account_id}:role/lambda_exec_role"
           ]
         },
@@ -708,7 +708,7 @@ resource "aws_lb_target_group" "app_tg" {
     enabled             = true
     healthy_threshold   = 2
     interval            = 120
-    timeout             = 5
+    timeout             = 15
     path                = "/healthz"
     port                = var.app_port
     unhealthy_threshold = 2
@@ -802,12 +802,9 @@ resource "aws_lambda_function" "my_lambda_function" {
 
   environment {
     variables = {
-      DB_HOST = aws_db_instance.csye6225.address
-      DB_USER = var.db_username
-      # DB_PASS                  = var.db_password
-      DB_DATABASE = aws_db_instance.csye6225.db_name
-      # SENDGRID_API_KEY         = var.sendgrid_api_key
-      # SENDGRID_VERIFIED_SENDER = var.sendgrid_verified_sender
+      DB_HOST                   = aws_db_instance.csye6225.address
+      DB_USER                   = var.db_username
+      DB_DATABASE               = aws_db_instance.csye6225.db_name
       SNS_TOPIC_ARN             = aws_sns_topic.my_topic.arn
       REGION                    = var.region
       environment               = var.environment
@@ -928,7 +925,7 @@ resource "aws_kms_key" "ec2_key" {
           AWS = [
             "arn:aws:iam::${var.account_id}:role/ec2_role",
             "arn:aws:iam::${var.account_id}:role/lambda_exec_role",
-            "arn:aws:iam::${var.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling" // Example Auto Scaling role
+            "arn:aws:iam::${var.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
           ]
         },
         Action = [
@@ -947,7 +944,7 @@ resource "aws_kms_key" "ec2_key" {
           AWS = [
             "arn:aws:iam::${var.account_id}:role/ec2_role",
             "arn:aws:iam::${var.account_id}:role/lambda_exec_role",
-            "arn:aws:iam::${var.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling" // Example Auto Scaling role
+            "arn:aws:iam::${var.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
           ]
         },
         Action = [
@@ -982,7 +979,7 @@ resource "aws_launch_template" "app_template" {
       volume_size           = 50
       volume_type           = "gp2"
       encrypted             = true
-      kms_key_id            = aws_kms_key.ec2_key.arn // Using the EC2 KMS key for encryption
+      kms_key_id            = aws_kms_key.ec2_key.arn
     }
   }
   network_interfaces {
@@ -995,16 +992,13 @@ resource "aws_launch_template" "app_template" {
   }
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    db_host     = aws_db_instance.csye6225.address
-    db_username = var.db_username
-    # db_password               = var.db_password
-    db_name   = aws_db_instance.csye6225.db_name
-    app_port  = var.app_port
-    s3_bucket = aws_s3_bucket.app_bucket.bucket
-    region    = var.region
-    # sendgrid_api_key          = var.sendgrid_api_key
-    domain_name = var.domain_name
-    # sendgrid_verified_sender  = var.sendgrid_verified_sender
+    db_host                   = aws_db_instance.csye6225.address
+    db_username               = var.db_username
+    db_name                   = aws_db_instance.csye6225.db_name
+    app_port                  = var.app_port
+    s3_bucket                 = aws_s3_bucket.app_bucket.bucket
+    region                    = var.region
+    domain_name               = var.domain_name
     sns_topic_arn             = aws_sns_topic.my_topic.arn
     rds_db_password_name      = var.rds_db_password_name
     sendgrid_credentials_name = var.sendgrid_credentials_name
@@ -1033,7 +1027,7 @@ resource "aws_iam_policy" "secrets_access_policy" {
         ],
         "Resource" : [
           aws_secretsmanager_secret.sendgrid_credentials.arn,
-          aws_secretsmanager_secret.db_password_secret.arn // Add other specific secret ARNs as needed
+          aws_secretsmanager_secret.db_password_secret.arn
         ]
       },
       {
@@ -1069,7 +1063,6 @@ resource "aws_kms_key" "secrets_manager_key" {
         Effect = "Allow",
         Principal = {
           AWS = [
-            # "arn:aws:iam::aws:policy/service-role/AWSServiceRoleForSecretsManager", // AWS Secrets Manager service role
             "arn:aws:iam::${var.account_id}:role/ec2_role",
             "arn:aws:iam::${var.account_id}:role/lambda_exec_role"
           ]
@@ -1088,8 +1081,7 @@ resource "aws_kms_key" "secrets_manager_key" {
         Effect = "Allow",
         Principal = {
           AWS = [
-            # "arn:aws:iam::aws:policy/service-role/AWSServiceRoleForSecretsManager", // AWS Secrets Manager service role
-            "arn:aws:iam::${var.account_id}:role/ec2_role", // Replace with your specific IAM role for accessing secrets
+            "arn:aws:iam::${var.account_id}:role/ec2_role",
             "arn:aws:iam::${var.account_id}:role/lambda_exec_role"
           ]
         },
