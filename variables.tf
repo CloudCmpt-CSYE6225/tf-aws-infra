@@ -128,7 +128,7 @@ variable "sendgrid_credentials_name" {
   type        = string
 }
 
-variable "rds_db_password" {
+variable "rds_db_password_name" {
   description = "Password name for the RDS instance"
   type        = string
 
