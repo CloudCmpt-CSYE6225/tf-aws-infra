@@ -106,6 +106,11 @@ if [ -z "$SENDGRID_API_KEY" ]; then
     log "Failed to retrieve SENDGRID_API_KEY from Secrets Manager."
 fi
 
+sendgrid_verified_sender=$(aws secretsmanager get-secret-value --secret-id "${sendgrid_credentials_name}" --query SecretString --output text | jq -r .sendgrid_verified_sender)
+if [ -z "$sendgrid_verified_sender" ]; then
+    log "Failed to retrieve sendgrid_verified_sender from Secrets Manager."
+fi
+
 sudo bash -c "cat > /tmp/new_env << EOT
 DB_HOST=${db_host}
 DB_PORT=3306
@@ -117,7 +122,7 @@ S3_BUCKET=${s3_bucket}
 AWS_REGION=${region}
 SENDGRID_API_KEY=$SENDGRID_API_KEY
 DOMAIN_NAME=${domain_name}
-SENDGRID_VERIFIED_SENDER=${sendgrid_verified_sender}
+SENDGRID_VERIFIED_SENDER=$sendgrid_verified_sender
 SNS_TOPIC_ARN=${sns_topic_arn}
 EOT"
 
@@ -152,4 +157,4 @@ fi
 # Log final status of webapp service.
 sudo systemctl status webapp | sudo tee -a /var/log/user-data.log 
 
-log “User data script completed successfully”
+log "User data script completed successfully"
