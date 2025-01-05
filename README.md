@@ -47,3 +47,5 @@
 
 6. **Command used to import SSL Certificate**
    ``` aws acm import-certificate --certificate fileb:///Users/srijithmakam/Documents/Cloud/demo_srijithmakam.me/demo_srijithmakam_me.crt --private-key fileb:///Users/srijithmakam/Documents/Cloud/private.key --certificate-chain fileb:///Users/srijithmakam/Documents/Cloud/demo_srijithmakam.me/demo_srijithmakam_me.ca-bundle```
+
+   ![alt text](image.png)
